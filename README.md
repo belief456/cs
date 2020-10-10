@@ -1,2 +1,2 @@
 # cs
- client server socket examples in C.
+ C/S examples in C.
