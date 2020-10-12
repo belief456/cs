@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if 0
 /* refer getaddrinfo man-page */
 int setup_fd(const char *addr, const char *port)
 {
@@ -48,6 +49,33 @@ int setup_fd(const char *addr, const char *port)
 	freeaddrinfo(results);
 	return fd;
 }
+#endif
+
+#if 1
+/* simpler way */
+int setup_fd(const char *addr_str, const char *port)
+{
+	int fd = -1, ret = -1;
+	struct sockaddr_in addr;
+
+	memset(&addr, 0, sizeof(struct sockaddr_in));
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(atoi(port));
+	addr.sin_addr.s_addr = inet_addr(addr_str);
+
+	fd = socket(AF_INET, SOCK_STREAM, 0);
+	if(-1 == fd)
+		return -1;
+	ret = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
+	if(-1 == ret)
+	{
+		close(fd);
+		return -1;
+	}
+
+	return fd;
+}
+#endif
 
 int doit(int fd)
 {

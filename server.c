@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
+#if 0
 int setup_fd(const char *port)
 {
 	int ret;
@@ -59,6 +59,43 @@ int setup_fd(const char *port)
 	freeaddrinfo(results);
 	return fd;
 }
+#endif
+
+#if 1
+/* simple way */
+int setup_fd(const char *port)
+{
+	int ret;
+	int fd;
+	struct sockaddr_in addr;
+
+	memset(&addr, 0, sizeof(struct sockaddr_in));
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(atoi(port));
+	//addr.sin_addr.s_addr = inet_addr(addr_str);
+	addr.sin_addr.s_addr = INADDR_ANY;
+
+	fd = socket(AF_INET, SOCK_STREAM, 0);
+	if(-1 == fd)
+		return -1;
+
+	ret = bind(fd, (struct sockaddr *)&addr, sizeof(addr));
+	if(-1 == ret)
+	{
+		close(fd);
+		return -1;
+	}
+
+	ret = listen(fd, 100);
+	if(0 != ret)
+	{
+		close(fd);
+		return -1;
+	}
+
+	return fd;
+}
+#endif
 
 int doit(int fd, struct sockaddr_un peer_addr, socklen_t peer_addr_size)
 {
@@ -67,7 +104,7 @@ int doit(int fd, struct sockaddr_un peer_addr, socklen_t peer_addr_size)
 	char sbuf[NI_MAXSERV];
 
 #define BUFLEN	512
-	char buf[BUFLEN];
+	char buf[BUFLEN + 1];
 	int len;
 
 	ret = getnameinfo((struct sockaddr *)&peer_addr, peer_addr_size, hbuf, sizeof(hbuf), sbuf, sizeof(sbuf),\
@@ -76,7 +113,12 @@ int doit(int fd, struct sockaddr_un peer_addr, socklen_t peer_addr_size)
 		printf("getnameinfo error %s\n", gai_strerror(ret));
 
 	ret = recv(fd, buf, BUFLEN, 0);
-	if(-1 == ret || 0 == ret)
+	if(0 == ret)
+	{
+		printf("%s %s bye!\n", hbuf, sbuf);
+		return -1;
+	}
+	else if(-1 == ret)
 	{
 		printf("recv from %s %s error \n", hbuf, sbuf);
 		return -1;
@@ -94,7 +136,7 @@ int main(int argc, char **argv)
 	struct sockaddr_un peer_addr;
 	socklen_t peer_addr_size;
 
-	if(argc != 2)
+	if(argc < 2)
 	{
 		printf("Usage:\t%s port\n", argv[0]);
 		return -1;
