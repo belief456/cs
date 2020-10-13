@@ -5,6 +5,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+struct thread_info
+{
+	pthread_t tid;
+	struct sockaddr_in addr;
+	int fd;
+};
+
 #if 0
 int setup_fd(const char *port)
 {
@@ -97,44 +104,53 @@ int setup_fd(const char *port)
 }
 #endif
 
-int doit(int fd, struct sockaddr_un peer_addr, socklen_t peer_addr_size)
+static void *thread_start(void *arg)
 {
 	int ret;
 	char hbuf[NI_MAXHOST];
 	char sbuf[NI_MAXSERV];
+	struct thread_info *tinfo = arg;
 
 #define BUFLEN	512
 	char buf[BUFLEN + 1];
 	int len;
 
-	ret = getnameinfo((struct sockaddr *)&peer_addr, peer_addr_size, hbuf, sizeof(hbuf), sbuf, sizeof(sbuf),\
-			NI_NUMERICHOST | NI_NUMERICSERV);
+	ret = getnameinfo((struct sockaddr *)&tinfo->addr, sizeof(tinfo->addr), hbuf, sizeof(hbuf), sbuf, sizeof(sbuf), NI_NUMERICHOST | NI_NUMERICSERV);
 	if(0 != ret)
 		printf("getnameinfo error %s\n", gai_strerror(ret));
-
-	ret = recv(fd, buf, BUFLEN, 0);
-	if(0 == ret)
+	else
 	{
-		printf("%s %s bye!\n", hbuf, sbuf);
-		return -1;
-	}
-	else if(-1 == ret)
-	{
-		printf("recv from %s %s error \n", hbuf, sbuf);
-		return -1;
+		printf("connect from %s %s! \n", hbuf, sbuf);
 	}
 
-	buf[ret] = '\0';	/* NULL terminated?, necessary? */
-	printf("recv from %s %s [%s]\n", hbuf, sbuf, buf);
-	return 0;
+	while(1)
+	{
+		ret = recv(tinfo->fd, buf, BUFLEN, 0);
+		if(0 == ret)
+		{
+			printf("%s %s bye!\n", hbuf, sbuf);
+			break;
+		}
+		else if(-1 == ret)
+		{
+			printf("recv from %s %s error \n", hbuf, sbuf);
+			break;
+		}
+
+		buf[ret] = '\0';	/* NULL terminated?, necessary? */
+		printf("\tfrom %s %s [%s]\n", hbuf, sbuf, buf);
+	}
+
+	return NULL;
 }
 
 int main(int argc, char **argv)
 {
-	int fd = -1;
-	int nfd = -1;
-	struct sockaddr_un peer_addr;
+	int fd = -1, nfd = -1;
+#define MAX_TNUM 1000
+	struct thread_info *tinfo = NULL;
 	socklen_t peer_addr_size;
+	int t_num = 0;
 
 	if(argc < 2)
 	{
@@ -149,19 +165,29 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	peer_addr_size = sizeof(struct sockaddr_un);
+	tinfo = calloc(MAX_TNUM, sizeof(struct thread_info));
+	if(NULL == tinfo)
+	{
+		printf("calloc error...\n");
+		return -1;
+	}
+
+	peer_addr_size = sizeof(struct sockaddr_in);
 	while(1)
 	{
-		nfd = accept(fd, (struct sockaddr *)&peer_addr, &peer_addr_size);
+		nfd = accept(fd, (struct sockaddr *)&tinfo[t_num].addr, &peer_addr_size);
 		if(-1 != nfd)
 		{
-			while(-1 != doit(nfd, peer_addr, peer_addr_size))
+			/*
+			while(-1 != doit(nfd, peer_addr))
 				sleep(1);
+			*/
+			tinfo[t_num].fd = nfd;
+			pthread_create(&tinfo[t_num].tid, NULL, thread_start, &tinfo[t_num]);
+			t_num++;
 		}
-		sleep(1);
 	}
 
 	return 0;
 }
-
 
